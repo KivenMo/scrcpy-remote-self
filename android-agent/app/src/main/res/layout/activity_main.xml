@@ -1,0 +1,357 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F5F6F8"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="18dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="远程协助 · 被控端"
+            android:textColor="#111418"
+            android:textSize="21sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:lineSpacingExtra="3dp"
+            android:text="让另一台手机（控制端）看到并操作这台手机。三步：填服务器地址 → 开无障碍 → 点开始。"
+            android:textColor="#6B7280"
+            android:textSize="13sp" />
+
+        <!-- 服务器 -->
+        <TextView
+            style="@style/Label"
+            android:layout_marginTop="20dp"
+            android:text="1. 服务器地址" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/etHost"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="3"
+                android:hint="192.168.1.10"
+                android:inputType="textUri"
+                android:maxLines="1"
+                android:textSize="15sp" />
+
+            <EditText
+                android:id="@+id/etPort"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:hint="8081"
+                android:inputType="number"
+                android:maxLines="1"
+                android:textSize="15sp" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="跑 server.js 的那台电脑的局域网 IP，端口用 8081（被控端接入端口）。"
+            android:textColor="#9AA1AB"
+            android:textSize="12sp" />
+
+        <!-- 加密 -->
+        <TextView
+            style="@style/Label"
+            android:layout_marginTop="18dp"
+            android:text="2. 加密连接（TLS）" />
+
+        <CheckBox
+            android:id="@+id/cbTls"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="用 TLS 连接中继（服务器配了证书才勾）"
+            android:textSize="14sp" />
+
+        <EditText
+            android:id="@+id/etTlsPin"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="服务器证书指纹（可留空，第一次会自动记住）"
+            android:inputType="textNoSuggestions"
+            android:maxLines="2"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/tvTls"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:background="#FFFFFF"
+            android:lineSpacingExtra="3dp"
+            android:padding="12dp"
+            android:text="未启用加密 —— 配对码、屏幕画面、输入的密码都是明文，只适合局域网。"
+            android:textColor="#9AA1AB"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btnTlsPin"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:layout_marginTop="6dp"
+            android:text="重新学习服务器指纹（清掉已记住的）"
+            android:textSize="13sp" />
+
+        <!-- 配对码 -->
+        <TextView
+            style="@style/Label"
+            android:layout_marginTop="18dp"
+            android:text="3. 配对码" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <EditText
+                android:id="@+id/etRoom"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:digits="ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+                android:inputType="textCapCharacters"
+                android:letterSpacing="0.12"
+                android:maxLength="12"
+                android:maxLines="1"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnNewCode"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="换一个" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="把这串码告诉控制端，对方输入后即可连上。不要随便告诉别人。"
+            android:textColor="#9AA1AB"
+            android:textSize="12sp" />
+
+        <!-- 无障碍 -->
+        <TextView
+            style="@style/Label"
+            android:layout_marginTop="18dp"
+            android:text="4. 操作权限" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#FFFFFF"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="14dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tvA11y"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="无障碍服务：未开启"
+                    android:textColor="#D64545"
+                    android:textSize="15sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="没有它就只能看画面，不能点、不能开 App"
+                    android:textColor="#9AA1AB"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btnA11y"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="去开启" />
+        </LinearLayout>
+
+        <!-- 取文件权限（可选） -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:background="#FFFFFF"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="14dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tvMedia"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="取文件权限：未授予"
+                    android:textColor="#9AA1AB"
+                    android:textSize="15sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="可选。授予后控制端才能把手机上的照片/视频取走"
+                    android:textColor="#9AA1AB"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btnMedia"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="授权" />
+        </LinearLayout>
+
+        <!-- 主按钮 -->
+        <Button
+            android:id="@+id/btnStart"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="22dp"
+            android:background="#0A66C2"
+            android:text="开始接受远程协助"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp" />
+
+        <Button
+            android:id="@+id/btnStop"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="8dp"
+            android:enabled="false"
+            android:text="停止" />
+
+        <Button
+            android:id="@+id/btnBattery"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="8dp"
+            android:text="加入电池优化白名单（防后台被杀）" />
+
+        <!-- 无人值守模式 -->
+        <TextView
+            style="@style/Label"
+            android:layout_marginTop="26dp"
+            android:text="5. 无人值守（手机放公司、人不在旁边时用这个）" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#FFFFFF"
+            android:lineSpacingExtra="3dp"
+            android:padding="14dp"
+            android:text="上面那个「开始接受远程协助」需要你在手机上点一下录屏授权。手机放在公司没人点，就永远启动不了。\n\n这个模式不录屏 —— 控制端看不到画面，但能读到当前界面上的所有文字和按钮，然后按文字点、开应用、输入文字。启动时没有任何弹窗，也可以开机自启。打卡这类「知道点哪儿就行」的场景完全够用。\n\n代价：看不到画面，只能盲操作；灭屏时读不到界面（收到指令会自动亮屏）；锁屏界面仍然读不到也点不了。"
+            android:textColor="#6B7280"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btnUnattended"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="10dp"
+            android:background="#1D9E75"
+            android:text="开启文字模式 · 待命"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp" />
+
+        <Button
+            android:id="@+id/btnAutoStart"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="8dp"
+            android:text="开机自动启动：关" />
+
+        <Button
+            android:id="@+id/btnKeepAwake"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="8dp"
+            android:text="屏幕常亮：关" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="#FFF6E5"
+            android:lineSpacingExtra="3dp"
+            android:padding="14dp"
+            android:text="想让「开机自动启动」真的生效，还得在系统里放行一次：华为 / 小米 / OPPO 等 ROM 会拦掉开机广播，应用不在「启动管理」白名单里就永远起不来（实测华为上 onReceive 一次都不会被调用）。点下面这个按钮去开，找不到就手动到「手机管家 → 应用启动管理」里把本应用设为允许自启动。\n\n这是一次性的设置 —— 在公司把手机架好的时候顺手做掉就行。"
+            android:textColor="#8A6100"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btnAutostartCfg"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="8dp"
+            android:text="打开系统的「启动管理」设置" />
+
+        <TextView
+            android:id="@+id/tvBoot"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="#FFFFFF"
+            android:lineSpacingExtra="3dp"
+            android:padding="14dp"
+            android:text="上次开机自启：还没有过记录"
+            android:textColor="#9AA1AB"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/tvStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="#FFFFFF"
+            android:lineSpacingExtra="3dp"
+            android:padding="14dp"
+            android:text="未启动"
+            android:textColor="#3C4450"
+            android:textSize="13sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:lineSpacingExtra="3dp"
+            android:text="只能在你自己拥有的设备，或对方明确知情并同意的设备上使用。锁屏界面、银行与支付页面受系统保护，无法被远程操作。"
+            android:textColor="#9AA1AB"
+            android:textSize="12sp" />
+
+    </LinearLayout>
+</ScrollView>

@@ -1,0 +1,44 @@
+# Caddyfile — 有域名 + Let's Encrypt（推荐）
+#
+# 把 example.com 换成你的域名，然后：
+#   cp Caddyfile.letsencrypt Caddyfile
+#   docker compose up -d
+#
+# 被控端 App 里：
+#   地址填你的域名，端口 8081，TLS 打开，
+#   指纹框留空（Let's Encrypt 在系统信任库里，不需要指纹）。
+
+example.com {
+    # 可选：只允许特定 IP（公司和家里出口 IP）
+    # @blocked not remote_ip 203.0.113.7 198.51.100.8
+    # respond @blocked "Access denied" 403
+
+    # 可选：基本身份验证（控制端打开页面时多一道口令）
+    # basicauth {
+    #     admin $2a$14$...   # 用 caddy hash-password 生成
+    # }
+
+    # 可选：速率限制（比应用层的更底层，推荐至少开一个）
+    # rate_limit {
+    #     zone static_example {
+    #         key static
+    #         events 30
+    #         window 1m
+    #     }
+    # }
+
+    # WebSocket 升级
+    @ws {
+        header Connection *Upgrade*
+        header Upgrade websocket
+    }
+    reverse_proxy @ws relay:8080
+
+    # 普通 HTTP
+    reverse_proxy relay:8080
+
+    # 日志（可选）
+    log {
+        output file /var/log/caddy/access.log
+    }
+}

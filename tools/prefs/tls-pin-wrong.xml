@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <boolean name="unattended" value="true" />
+    <boolean name="tls" value="true" />
+    <int name="port" value="8081" />
+    <string name="host">127.0.0.1</string>
+    <string name="room">JC484UQK</string>
+    <string name="tlsPin">0000000000000000000000000000000000000000000000000000000000000000</string>
+</map>

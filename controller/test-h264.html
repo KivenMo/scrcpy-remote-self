@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>H.264 链路自测</title>
+<style>
+  body{font:14px/1.7 -apple-system,"PingFang SC",sans-serif; margin:0; padding:20px;
+       background:#f5f6f8; color:#1c1c1e;}
+  h1{font-size:17px; font-weight:500; margin:0 0 4px;}
+  p.sub{color:#8a8a8e; font-size:13px; margin:0 0 16px;}
+  .row{padding:9px 12px; background:#fff; border:1px solid #e3e3e8; border-radius:10px;
+       margin-bottom:8px; display:flex; gap:10px; align-items:flex-start;}
+  .tag{flex:none; font-size:12px; padding:1px 8px; border-radius:20px; margin-top:2px;}
+  .ok{background:#E1F5EE; color:#0F6E56;}
+  .no{background:#FCEBEB; color:#A32D2D;}
+  .skip{background:#F1EFE8; color:#5F5E5A;}
+  .msg{flex:1;}
+  #summary{font-size:15px; font-weight:500; margin:16px 0 10px;}
+  canvas{border:1px solid #e3e3e8; border-radius:8px; background:#000; max-width:320px;}
+  .preview{margin-top:14px;}
+</style>
+</head>
+<body>
+<h1>H.264 链路自测</h1>
+<p class="sub">
+  用浏览器自己的 WebCodecs 编码器生成一段真实 H.264，再走一遍控制端 index.html 用的那套
+  <code>h264-decoder.js</code>（同样的帧格式、同样的解码调用），验证解码路径是否通。
+</p>
+<div id="results"></div>
+<div id="summary">运行中…</div>
+
+<div class="preview">
+  <canvas id="out" width="320" height="640"></canvas>
+</div>
+
+<script src="h264-decoder.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var results = [];
+  function report(name, status, detail) {
+    results.push({ name: name, status: status, detail: detail || '' });
+    var box = document.getElementById('results');
+    var row = document.createElement('div');
+    row.className = 'row';
+    var tag = document.createElement('span');
+    tag.className = 'tag ' + (status === 'ok' ? 'ok' : status === 'no' ? 'no' : 'skip');
+    tag.textContent = status === 'ok' ? '通过' : status === 'no' ? '失败' : '跳过';
+    var msg = document.createElement('span');
+    msg.className = 'msg';
+    msg.textContent = name + (detail ? ' —— ' + detail : '');
+    row.appendChild(tag); row.appendChild(msg);
+    box.appendChild(row);
+  }
+
+  function done() {
+    var bad = results.filter(function (r) { return r.status === 'no'; }).length;
+    var good = results.filter(function (r) { return r.status === 'ok'; }).length;
+    var el = document.getElementById('summary');
+    el.textContent = (bad === 0 ? '全部通过' : '有失败项') + '：' + good + ' 通过 / ' + bad + ' 失败';
+    el.style.color = bad === 0 ? '#0F6E56' : '#A32D2D';
+    document.title = (bad === 0 ? 'PASS' : 'FAIL') + ' - H.264 链路自测';
+  }
+
+  function bytesToB64(bytes) {
+    var s = '';
+    for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    return btoa(s);
+  }
+
+  async function run() {
+    /* ---- 1. 环境检查 ---- */
+    if (!H264Decoder.supported()) {
+      report('WebCodecs 可用', 'no', 'window.VideoDecoder / EncodedVideoChunk 不存在');
+      done(); return;
+    }
+    report('WebCodecs 可用', 'ok');
+
+    if (typeof VideoEncoder !== 'function') {
+      report('VideoEncoder 可用', 'no', '无法自造 H.264 测试流');
+      done(); return;
+    }
+
+    /* ---- 2. 造一段真实 H.264 ---- */
+    var W = 320, H = 640, N = 12;
+    var src = document.createElement('canvas');
+    src.width = W; src.height = H;
+    var sctx = src.getContext('2d');
+
+    var chunks = [];
+    var descB64 = null;
+    var encErr = null;
+
+    var enc;
+    try {
+      enc = new VideoEncoder({
+        output: function (chunk, meta) {
+          if (meta && meta.decoderConfig && meta.decoderConfig.description && !descB64) {
+            var d = meta.decoderConfig.description;
+            descB64 = bytesToB64(new Uint8Array(d));
+          }
+          var buf = new Uint8Array(chunk.byteLength);
+          chunk.copyTo(buf);
+          chunks.push({ data: buf, key: chunk.type === 'key', ts: chunk.timestamp });
+        },
+        error: function (e) { encErr = e; },
+      });
+      enc.configure({
+        codec: 'avc1.42E01E',
+        width: W, height: H,
+        bitrate: 800000,
+        framerate: 15,
+        avc: { format: 'avc' },
+      });
+    } catch (e) {
+      report('创建 H.264 编码器', 'no', String(e && e.message || e));
+      done(); return;
+    }
+
+    for (var i = 0; i < N; i++) {
+      sctx.fillStyle = '#101418';
+      sctx.fillRect(0, 0, W, H);
+      sctx.fillStyle = i % 2 ? '#1D9E75' : '#0A66C2';
+      sctx.fillRect(20 + i * 12, 100 + i * 20, 160, 120);
+      sctx.fillStyle = '#FFFFFF';
+      sctx.fillRect(40, 400, 240, 8 + i * 6);
+      var f = new VideoFrame(src, { timestamp: i * 66666 });
+      enc.encode(f, { keyFrame: i === 0 });
+      f.close();
+    }
+    await enc.flush();
+    enc.close();
+
+    if (encErr) { report('编码 H.264', 'no', String(encErr.message || encErr)); done(); return; }
+    report('编码 H.264', chunks.length > 0 ? 'ok' : 'no',
+      chunks.length + ' 个分片，' + (descB64 ? '带 avcC description' : '无 description'));
+
+    if (!descB64) {
+      report('拿到 avcC description', 'no', '编码器没给 decoderConfig.description');
+      done(); return;
+    }
+    report('拿到 avcC description', 'ok', descB64.length + ' 字符 base64');
+
+    /* ---- 3. 用控制端的帧格式打包（和安卓端发的一模一样） ---- */
+    var wire = chunks.map(function (c) {
+      return RAFrame.buildFrame(RAFrame.KIND_H264, c.key, c.ts, c.data);
+    });
+    report('套用统一帧格式', 'ok', '共 ' + wire.length + ' 帧');
+
+    /* 导出这段流，供 test-h264-e2e.js 回放做集成测试 */
+    window.__stream = {
+      codec: 'avc1.42E01E',
+      desc: descB64,
+      w: W, h: H,
+      frames: chunks.map(function (c) {
+        return { key: c.key, ts: c.ts, b64: bytesToB64(c.data) };
+      }),
+    };
+    window.__streamReady = true;
+
+    /* ---- 4. 解析回来 ---- */
+    var parsed = wire.map(function (w) {
+      // 模拟网络传输：转成 ArrayBuffer 再解析
+      return RAFrame.parseFrame(w.buffer.slice(0));
+    });
+    var parseOK = parsed.every(function (p, i) {
+      return p && p.kind === RAFrame.KIND_H264 && p.key === chunks[i].key && p.pts === chunks[i].ts;
+    });
+    report('帧格式解析正确', parseOK ? 'ok' : 'no',
+      parseOK ? 'kind / key / pts 都对得上' : '解析结果与原始数据不一致');
+
+    /* ---- 5. 关键帧之前的 delta 必须被丢弃 ---- */
+    var outCanvas = document.getElementById('out');
+    var dec = new H264Decoder({
+      canvas: outCanvas,
+      onError: function () {},
+    });
+
+    var ok5 = await dec.configure('avc1.42E01E', descB64, W, H);
+    if (!ok5) { report('解码器配置成功', 'no', 'isConfigSupported 返回 false'); done(); return; }
+    report('解码器配置成功', 'ok');
+
+    var deltaIdx = -1;
+    for (var k = 0; k < parsed.length; k++) if (!parsed[k].key) { deltaIdx = k; break; }
+    if (deltaIdx > 0) {
+      dec.push(parsed[deltaIdx].data, false, parsed[deltaIdx].pts);
+      report('关键帧前的 delta 被丢弃', dec.dropped > 0 ? 'ok' : 'no',
+        dec.dropped > 0 ? '已丢弃 ' + dec.dropped + ' 帧' : '没有丢弃，解码器可能报错');
+    } else {
+      report('关键帧前的 delta 被丢弃', 'skip', '这段流里没有非关键帧');
+    }
+
+    /* ---- 6. 完整喂一遍，看能不能解出来 ---- */
+    var decodedBefore = dec.decoded;
+    for (var j = 0; j < parsed.length; j++) {
+      dec.push(parsed[j].data, parsed[j].key, parsed[j].pts);
+    }
+    // 用解码器自己的 flush() 等，别靠 setTimeout —— 后者在虚拟时钟下不可靠
+    await dec.flush();
+    await new Promise(function (r) { setTimeout(r, 80); });
+
+    var got = dec.decoded - decodedBefore;
+    report('解出画面帧', got > 0 ? 'ok' : 'no', '解出 ' + got + ' 帧（共喂入 ' + parsed.length + ' 帧）');
+
+    if (got > 0) {
+      report('尺寸识别正确', (dec.width === W && dec.height === H) ? 'ok' : 'no',
+        dec.width + 'x' + dec.height + '（期望 ' + W + 'x' + H + '）');
+
+      // 画面真的画上去了吗
+      var px = outCanvas.getContext('2d').getImageData(0, 0, outCanvas.width, outCanvas.height).data;
+      var nonBlack = 0;
+      for (var p = 0; p < px.length; p += 4 * 97) {
+        if (px[p] > 8 || px[p + 1] > 8 || px[p + 2] > 8) nonBlack++;
+      }
+      report('画布确实被绘制', nonBlack > 0 ? 'ok' : 'no', nonBlack + ' 个采样点非黑');
+    }
+
+    dec.close();
+    done();
+  }
+
+  run().catch(function (e) {
+    report('测试过程异常', 'no', String(e && e.message || e));
+    done();
+  });
+})();
+</script>
+</body>
+</html>

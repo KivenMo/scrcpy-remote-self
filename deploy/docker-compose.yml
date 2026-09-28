@@ -1,0 +1,62 @@
+# 远程协助中继 —— 一键部署到 VPS
+#
+# 两条链路：
+#   · Caddy (443)  ->  控制端 https + wss  ->  中继 :8080
+#   · 中继 (8081)   ->  被控端 TLS over TCP
+#
+# Caddy 负责：
+#   - 自动 HTTPS（Let's Encrypt）
+#   - 基本身份验证（可选）
+#   - 速率限制（可选）
+#   - IP 白名单（可选）
+#
+# 被控端端口 8081 走裸 TCP/TLS，Caddy 是 HTTP 代理，透不过它，
+# 所以 8081 直接暴露在公网。防火墙只放行 443 和 8081。
+#
+# 用法：
+#   1. 填好 .env
+#   2. 有域名：cp Caddyfile.letsencrypt Caddyfile
+#      无域名：cp Caddyfile.selfsigned Caddyfile  &&  bash self-signed.sh
+#   3. docker compose up -d
+
+services:
+  relay:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: remote-assist-relay
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8081:8081"
+    networks:
+      - ra-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health?token=${HEALTH_TOKEN}"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: remote-assist-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - ra-net
+    depends_on:
+      - relay
+
+networks:
+  ra-net:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:

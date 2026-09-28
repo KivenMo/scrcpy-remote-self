@@ -1,0 +1,13 @@
+# 证书和私钥绝不能进版本库 —— 私钥泄露等于加密白做
+server/certs/
+*.pem
+*.key
+
+# 构建产物
+android-agent/build/
+android-agent/app/build/
+android-agent/.gradle/
+android-agent/local.properties
+
+# 测试临时文件
+server/_*.xml

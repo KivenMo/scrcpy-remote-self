@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">远程协助</string>
+    <string name="accessibility_label">远程协助 · 操作注入</string>
+    <string name="accessibility_summary">允许远端控制本机</string>
+    <string name="accessibility_desc">开启后，已配对的控制端可以点击、滑动本机屏幕，执行返回/主页/多任务，向输入框写入文字，并打开指定应用。只在本机与配对码匹配的控制端之间生效。请仅在你自己的设备或你明确同意的设备上开启。</string>
+</resources>

@@ -1,0 +1,1230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#f5f5f7">
+<title>远程协助 · 控制端</title>
+<style>
+  :root{
+    --bg:#f2f2f5; --panel:#ffffff; --line:#e3e3e8; --txt:#1c1c1e;
+    --muted:#8a8a8e; --blue:#0a66c2; --blue-soft:#e8f1fb;
+    --green:#1d9e75; --red:#d64545;
+    --r:12px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;overflow:hidden;}
+  body{
+    background:var(--bg); color:var(--txt);
+    font:400 15px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;
+    display:flex; flex-direction:column;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  .screen{display:none; flex:1; min-height:0; flex-direction:column;}
+  .screen.on{display:flex;}
+
+  /* ---------- 连接页 ---------- */
+  #connect{justify-content:center; padding:24px; gap:14px; overflow:auto;}
+  #connect h1{font-size:20px; font-weight:500; margin:0 0 4px;}
+  #connect p{margin:0 0 10px; color:var(--muted); font-size:13px;}
+  .field{display:flex; flex-direction:column; gap:6px;}
+  .field label{font-size:12px; color:var(--muted);}
+  input[type=text]{
+    width:100%; padding:13px 14px; font-size:16px;
+    border:1px solid var(--line); border-radius:var(--r);
+    background:var(--panel); color:var(--txt); outline:none;
+    font-family:inherit;
+  }
+  input[type=text]:focus{border-color:var(--blue);}
+  #code{letter-spacing:2px; font-size:20px; text-align:center; text-transform:uppercase;}
+  button{
+    font:inherit; border:1px solid var(--line); background:var(--panel); color:var(--txt);
+    padding:12px 14px; border-radius:var(--r); cursor:pointer;
+  }
+  button:active{opacity:.6;}
+  button.primary{background:var(--blue); border-color:var(--blue); color:#fff;}
+  button:disabled{opacity:.45;}
+  .hint{font-size:12px; color:var(--muted); line-height:1.6;}
+  .err{color:var(--red); font-size:13px; min-height:19px;}
+
+  /* ---------- 会话页 ---------- */
+  #topbar{
+    display:flex; align-items:center; gap:8px; padding:8px 12px;
+    background:var(--panel); border-bottom:1px solid var(--line); font-size:13px;
+  }
+  #dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none;}
+  #dot.ok{background:var(--green);} #dot.bad{background:var(--red);}
+  #stats{color:var(--muted); margin-left:auto; font-variant-numeric:tabular-nums;}
+  #codecTag{
+    font-size:11px; padding:2px 7px; border-radius:20px; flex:none;
+    background:var(--blue-soft); color:var(--blue);
+  }
+  #codecTag.jpeg{background:#F1EFE8; color:#5F5E5A;}
+  #netTag{
+    font-size:11px; padding:2px 7px; border-radius:20px; flex:none;
+    background:#E1F5EE; color:#0F6E56;
+  }
+  #netTag.fair{background:#FAEEDA; color:#854F0B;}
+  #netTag.poor{background:#FCEBEB; color:#A32D2D;}
+  #stage{flex:1; min-height:0; position:relative; display:flex; align-items:center; justify-content:center; background:#111;}
+  #surface{position:relative; display:inline-block; line-height:0; touch-action:none;}
+  #view{display:block; touch-action:none; background:#000; max-width:100%; max-height:100%;}
+
+  /* 震动反馈：iOS Safari 只在 <input type=checkbox switch> 被「真实点击」时才给触感，
+     所以需要一层 label 盖在画布上（label 的 for 会把点击转发给 switch）。
+     默认关闭 —— 它毕竟改变了触摸落点，让用户自己决定。 */
+  #hapticLayer{position:absolute; inset:0; display:none; touch-action:none;}
+  #hapticLayer.on{display:block;}
+  #hapticSwitch{
+    position:absolute; left:0; top:0; width:1px; height:1px;
+    margin:0; padding:0; border:0; opacity:0; pointer-events:none;
+  }
+  #overlay{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    color:#ddd; font-size:14px; text-align:center; padding:24px; background:#111; z-index:2;
+  }
+  #overlay.hide{display:none;}
+  #toolbar{
+    display:flex; gap:6px; padding:8px 10px; background:var(--panel);
+    border-top:1px solid var(--line); overflow-x:auto; align-items:center;
+  }
+  #toolbar button{padding:10px 12px; font-size:14px; white-space:nowrap; flex:none;}
+  #toolbar button.on{background:var(--blue-soft); border-color:var(--blue); color:var(--blue);}
+
+  /* ---------- 抽屉 ---------- */
+  .sheet{
+    position:absolute; left:0; right:0; bottom:0; top:44px; z-index:5;
+    background:var(--panel); border-top-left-radius:16px; border-top-right-radius:16px;
+    display:none; flex-direction:column; box-shadow:0 -8px 30px rgba(0,0,0,.18);
+  }
+  .sheet.on{display:flex;}
+  .sheet-head{display:flex; align-items:center; gap:8px; padding:12px 14px; border-bottom:1px solid var(--line);}
+  .sheet-head strong{font-weight:500; font-size:15px;}
+  .sheet-body{flex:1; overflow:auto; -webkit-overflow-scrolling:touch; padding:8px 0;}
+  .app{
+    display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid var(--line);
+    cursor:pointer;
+  }
+  .app:active{background:var(--blue-soft);}
+  .app .ico{width:34px;height:34px;border-radius:8px;background:var(--blue-soft);color:var(--blue);
+    display:flex;align-items:center;justify-content:center;font-size:14px;flex:none;}
+  .app .nm{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .app .pk{font-size:11px; color:var(--muted);}
+  .qrow{display:flex; gap:8px; padding:14px 16px 6px; flex-wrap:wrap;}
+  .qrow button{flex:1; min-width:96px;}
+  .qrow button small{display:block; color:var(--muted); font-size:11px; margin-top:2px;}
+  .qrow button.on{background:var(--blue-soft); border-color:var(--blue); color:var(--blue);}
+  .qrow button.on small{color:var(--blue);}
+  #toast{
+    position:absolute; left:50%; bottom:78px; transform:translateX(-50%);
+    background:rgba(0,0,0,.82); color:#fff; font-size:13px; padding:9px 15px;
+    border-radius:20px; opacity:0; transition:opacity .22s; pointer-events:none; z-index:20;
+    max-width:82%; text-align:center;
+  }
+  #toast.on{opacity:1;}
+</style>
+</head>
+<body>
+
+<!-- ================= 连接页 ================= -->
+<section id="connect" class="screen on">
+  <h1>远程协助 · 控制端</h1>
+  <p>被控手机（安卓）打开 App 后会显示一个配对码，填到下面。</p>
+
+  <div class="field">
+    <label for="host">服务器地址</label>
+    <input id="host" type="text" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="192.168.1.10:8080">
+  </div>
+
+  <div class="field">
+    <label for="code">配对码</label>
+    <input id="code" type="text" inputmode="text" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="16" placeholder="ABCD2345">
+  </div>
+
+  <button class="primary" id="go">连接</button>
+  <div class="err" id="err"></div>
+  <div class="hint">
+    提示：被控手机和这台手机要在同一网络，或服务器有公网地址。<br>
+    只能用于你自己的设备，或对方明确知情同意的设备。
+  </div>
+</section>
+
+<!-- ================= 会话页 ================= -->
+<section id="session" class="screen">
+  <div id="topbar">
+    <span id="dot"></span>
+    <span id="status">未连接</span>
+    <span id="codecTag">—</span>
+    <span id="netTag" style="display:none">—</span>
+    <span id="stats"></span>
+    <button id="quit" style="padding:6px 10px;font-size:12px;">断开</button>
+  </div>
+
+  <div id="stage">
+    <!-- 触摸统一绑在 #surface 上；#hapticLayer 只是可选地盖在画布上的一层，
+         开了震动反馈才显示。这样开关震动永远不会改变触摸的处理位置。 -->
+    <div id="surface">
+      <canvas id="view"></canvas>
+      <label id="hapticLayer" for="hapticSwitch" aria-hidden="true"></label>
+      <input id="hapticSwitch" type="checkbox" switch>
+    </div>
+    <div id="overlay">等待被控端画面…</div>
+
+    <div class="sheet" id="appSheet">
+      <div class="sheet-head">
+        <strong>打开 App</strong>
+        <input id="appSearch" type="text" placeholder="搜索应用名" style="flex:1;padding:8px 10px;font-size:15px;">
+        <button id="appClose">关闭</button>
+      </div>
+      <div class="sheet-body" id="appList"></div>
+    </div>
+
+    <div class="sheet" id="kbSheet">
+      <div class="sheet-head">
+        <strong>发送文字</strong>
+        <button id="kbClose">关闭</button>
+      </div>
+      <div style="padding:14px; display:flex; flex-direction:column; gap:10px;">
+        <input id="kbText" type="text" placeholder="要输入到被控手机的内容">
+        <div style="display:flex; gap:8px;">
+          <button class="primary" id="kbSend" style="flex:1;">发送</button>
+          <button id="kbEnter" style="flex:none;">发送并回车</button>
+        </div>
+        <div class="hint">文字会写入被控手机当前光标所在位置。如果没反应，先在被控手机上点一下输入框。</div>
+      </div>
+    </div>
+
+    <div class="sheet" id="qSheet">
+      <div class="sheet-head"><strong>画质与编码</strong><button id="qClose">关闭</button></div>
+
+      <div class="hint" style="padding:14px 16px 0; font-weight:500; color:var(--txt);">清晰度</div>
+      <div class="qrow">
+        <button data-q="480,8,55,800000">流畅<small>480p · 8fps</small></button>
+        <button data-q="720,12,60,1500000">均衡<small>720p · 12fps</small></button>
+        <button data-q="1080,15,65,3000000">清晰<small>1080p · 15fps</small></button>
+      </div>
+
+      <div class="hint" style="padding:14px 16px 0; font-weight:500; color:var(--txt);">编码方式</div>
+      <div class="qrow">
+        <button data-codec="auto">自动<small>优先 H.264</small></button>
+        <button data-codec="jpeg">JPEG<small>兼容性最好</small></button>
+      </div>
+      <div class="hint" style="padding:6px 16px 16px;">
+        H.264 靠浏览器硬件解码，同样清晰度带宽只要 JPEG 的五分之一左右。
+        如果你的浏览器不支持会自动退回 JPEG，也可以手动切。
+      </div>
+
+      <div class="hint" style="padding:0 16px; font-weight:500; color:var(--txt);">手感</div>
+      <div class="qrow">
+        <button id="bHaptic">震动反馈<small>点按手机时给一下触感</small></button>
+      </div>
+      <div class="hint" style="padding:6px 16px 16px;">
+        默认关闭。iPhone 上的网页震动只有 Safari 17.4+ 支持，而且系统没有公开接口 ——
+        只能靠一个隐藏的系统开关控件来实现，因此需要把一层透明控件盖在画面上。
+        万一你觉得点不准，关掉这里就完全恢复原状。Android 浏览器走标准震动接口。
+      </div>
+    </div>
+
+    <div class="sheet" id="clipSheet">
+      <div class="sheet-head"><strong>剪贴板</strong><button id="clipClose">关闭</button></div>
+      <div style="padding:14px; display:flex; flex-direction:column; gap:10px;">
+        <input id="clipText" type="text" placeholder="要发到被控手机的文本">
+        <div style="display:flex; gap:8px;">
+          <button class="primary" id="clipSend" style="flex:1;">写入手机剪贴板</button>
+          <button id="clipPaste" style="flex:none;">并粘贴</button>
+        </div>
+        <div style="height:1px; background:var(--line); margin:4px 0;"></div>
+        <button id="clipGet">从手机取回</button>
+        <div id="clipResult" style="display:none; word-break:break-all; background:var(--blue-soft);
+             color:var(--blue); padding:10px; border-radius:8px; font-size:13px;"></div>
+        <button id="clipCopy" style="display:none;">复制到本机剪贴板</button>
+        <div class="hint">
+          Android 10 起，后台应用读剪贴板受系统限制。读不到时我会自动改取
+          「当前输入框里的文字」—— 发验证码、发地址这类场景够用。
+        </div>
+      </div>
+    </div>
+
+    <div class="sheet" id="fileSheet">
+      <div class="sheet-head"><strong>传文件到手机</strong><button id="fileClose">关闭</button></div>
+      <div style="padding:14px; display:flex; flex-direction:column; gap:10px;">
+        <input id="fileInput" type="file">
+        <button class="primary" id="fileSend">发送</button>
+        <div id="fileProg" class="hint">选一个文件，然后点发送。</div>
+        <div class="hint">
+          文件会保存到被控手机的「下载」目录，不需要被控手机点任何东西。
+          分片 64KB，走同一条长连接，所以大文件会占满带宽、画面会变卡。
+        </div>
+      </div>
+    </div>
+
+    <div class="sheet" id="pullSheet">
+      <div class="sheet-head">
+        <strong>从手机取文件</strong>
+        <button id="pullRefresh" style="margin-left:auto;">刷新</button>
+        <button id="pullClose">关闭</button>
+      </div>
+      <div class="sheet-body" id="pullList">
+        <div class="hint" style="padding:16px;">点「刷新」列出被控手机上的照片和视频。</div>
+      </div>
+      <div style="padding:12px 14px; border-top:1px solid var(--line); background:var(--panel);">
+        <div id="pullProg" class="hint">还没取过文件。</div>
+      </div>
+    </div>
+
+    <!--
+      文字模式（无人值守）专用面板。
+      被控端没有录屏授权时，看不到画面，但能把界面上的文字和按钮读出来。
+      点任意一行 = 让被控手机点那个控件。
+    -->
+    <div class="sheet" id="uiSheet">
+      <div class="sheet-head">
+        <strong>读屏</strong>
+        <button id="uiRefresh" style="margin-left:auto;">重新读</button>
+        <button id="uiClose">关闭</button>
+      </div>
+      <div class="sheet-body" id="uiList">
+        <div class="hint" style="padding:16px;">点「重新读」取被控手机当前界面上的文字和按钮。</div>
+      </div>
+      <div style="padding:12px 14px; border-top:1px solid var(--line); background:var(--panel);">
+        <div id="uiInfo" class="hint">还没读过。</div>
+      </div>
+    </div>
+
+    <div id="toast"></div>
+  </div>
+
+  <div id="toolbar">
+    <button id="bBack">返回</button>
+    <button id="bHome">主页</button>
+    <button id="bRecents">多任务</button>
+    <button id="bNotif">通知栏</button>
+    <button id="bUi">读屏</button>
+    <button id="bApps">开 App</button>
+    <button id="bKb">打字</button>
+    <button id="bClip">剪贴板</button>
+    <button id="bFile">传文件</button>
+    <button id="bPull">取文件</button>
+    <button id="bQual">画质</button>
+    <button id="bRotate">横屏</button>
+  </div>
+</section>
+
+<script src="h264-decoder.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var view = $('view'), ctx = view.getContext('2d');
+  var surface = $('surface');
+  var ws = null, connected = false, roomCode = '';
+  var imgW = 0, imgH = 0;
+  var frames = 0, lastFpsT = 0, lastBytes = 0;
+  var startX = 0, startY = 0, startT = 0, moved = false, movedFar = false;
+  var longPressTimer = null;
+  var rotated = false;
+
+  /* 被控端是「文字模式」（无人值守，没有录屏）时为 true：
+     不会有任何视频帧，取而代之的是可点的界面文字列表。 */
+  var textMode = false;
+
+  /* 编码相关 */
+  var codecMode = 'none';      // none / h264 / jpeg
+  var codecPref = 'auto';      // auto / jpeg
+  var dec = null;
+  var fallbackTimer = null;
+  var decodedAtConfig = 0;
+
+  var webCodecsOK = window.H264Decoder && H264Decoder.supported();
+
+  /* ---------------- 画面自适应 ---------------- */
+  function layout() {
+    if (!imgW || !imgH) return;
+    var stage = $('stage').getBoundingClientRect();
+    var scale = Math.min(stage.width / imgW, stage.height / imgH);
+    var w = Math.max(1, Math.floor(imgW * scale));
+    var h = Math.max(1, Math.floor(imgH * scale));
+    view.style.width = w + 'px';
+    view.style.height = h + 'px';
+  }
+  window.addEventListener('resize', layout);
+  window.addEventListener('orientationchange', function () { setTimeout(layout, 260); });
+
+  function setSize(w, h) {
+    if (imgW === w && imgH === h) return;
+    imgW = w; imgH = h;
+    view.width = w; view.height = h;
+    layout();
+  }
+
+  /* ---------------- 连接 ---------------- */
+  $('host').value = (location.protocol === 'http:' || location.protocol === 'https:')
+    ? location.host : '';
+
+  function toast(msg) {
+    var t = $('toast');
+    t.textContent = msg; t.classList.add('on');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { t.classList.remove('on'); }, 2200);
+  }
+
+  function setStatus(text, cls) {
+    $('status').textContent = text;
+    $('dot').className = cls || '';
+  }
+
+  function setCodecTag(text, isJpeg) {
+    var el = $('codecTag');
+    el.textContent = text;
+    el.className = isJpeg ? 'jpeg' : '';
+  }
+
+  /* ---------------- 文字模式（无人值守，没有画面） ---------------- */
+
+  /*
+   * 被控端没给录屏授权时（手机放公司、没人点那个弹窗），它只会回界面文字。
+   * 这时画面区域永远是黑的，硬等视频只会让人以为坏了 —— 所以这里明确切成文字模式：
+   * 画布上盖一句说明，工具栏多一个「读屏」，点列表里的任意一行就等于让手机点那个控件。
+   */
+  function setTextMode(on) {
+    if (textMode === on) return;
+    textMode = on;
+    var ov = $('overlay');
+    if (on) {
+      setCodecTag('文字模式', false);
+      ov.classList.remove('hide');
+      ov.textContent = '这台手机没有录屏授权（文字模式）\n点下面的「读屏」看它现在停在哪个界面';
+      // 没有画面，这些就没意义了
+      $('bQual').style.display = 'none';
+      $('bRotate').style.display = 'none';
+      $('bPull').style.display = 'none';
+      $('bFile').style.display = 'none';
+      openSheet('uiSheet');
+      requestUi();
+    } else {
+      ov.classList.add('hide');
+      $('bQual').style.display = '';
+      $('bRotate').style.display = '';
+      $('bPull').style.display = '';
+      $('bFile').style.display = '';
+      closeSheets();
+    }
+  }
+
+  function requestUi() {
+    $('uiList').innerHTML = '<div class="hint" style="padding:16px;">正在读取界面…</div>';
+    send({ t: 'dump' });
+  }
+
+  /** 把被控端送来的界面文字渲染成可点的列表。 */
+  function renderUi(m) {
+    var items = m.items || [];
+    var box = $('uiList');
+    var off = items.filter(function (it) { return it.c && it.v === false; }).length;
+    $('uiInfo').textContent = (m.pkg ? '当前应用：' + m.pkg + ' · ' : '')
+      + items.length + ' 项'
+      + (off ? ' · ' + off + ' 项在屏幕外（点它会先自动滚动）' : '')
+      + (m.screenOn === false ? ' · 屏幕是黑的，已尝试唤醒' : '')
+      + (items.length ? ' · 点一行 = 让手机点那个控件' : '');
+
+    if (!items.length) {
+      box.innerHTML = '<div class="hint" style="padding:16px;">'
+        + '没读到任何文字。常见原因：停在锁屏界面（锁屏读不到也点不了）、'
+        + '屏幕上确实没有文字，或者无障碍服务被系统关掉了。'
+        + '</div>';
+      return;
+    }
+
+    box.innerHTML = '';
+    items.forEach(function (it) {
+      var label = it.t || it.d || '';
+      if (!label) return;
+      var clickable = !!it.c;
+      // v === false 表示这个元素在屏幕外（列表滚过之后，坐标会是负的）。
+      // 直接按它的坐标点会落到屏幕边缘，所以让被控端先滚过去。
+      var onScreen = it.v !== false;
+      var row = document.createElement('div');
+      row.className = 'app';
+      if (!onScreen) row.style.opacity = '0.55';
+      row.innerHTML = '<div class="ico">' + (clickable ? (onScreen ? '👆' : '⇣') : '·') + '</div>'
+        + '<div style="flex:1;min-width:0;">'
+        + '<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
+        + esc(label) + '</div>'
+        + '<div class="hint">'
+        + (clickable ? (onScreen ? '可点击' : '在屏幕外 · 点它会先滚动') : '只读')
+        + ' · ' + it.x + ',' + it.y
+        + (it.cls ? ' · ' + esc(String(it.cls).split('.').pop()) : '') + '</div>'
+        + '</div>';
+      if (clickable) {
+        row.addEventListener('click', function () {
+          send({ t: 'taptext', q: label, scroll: !onScreen });
+          toast(onScreen ? ('点了「' + label + '」') : ('滚动过去点「' + label + '」'));
+        });
+      }
+      box.appendChild(row);
+    });
+  }
+
+  /* ---------------- 连接（含自动重连） ---------------- */
+  var wantConnected = false;
+  var reconnectAttempt = 0;
+  var reconnectTimer = null;
+  var wsHost = '';
+  // 被中继限流时的解封时刻。被踢掉后立刻重连只会再被踢一次，所以重连要等过它。
+  var blockedUntil = 0;
+
+  function openSocket() {
+    var scheme = location.protocol === 'https:' ? 'wss://' : 'ws://';
+    try { ws = new WebSocket(scheme + wsHost + '/ws'); }
+    catch (e) { $('err').textContent = '地址无效：' + e.message; return; }
+    ws.binaryType = 'blob';
+
+    ws.onopen = function () {
+      connected = true;
+      reconnectAttempt = 0;
+      ws.send(JSON.stringify({ t: 'hello', room: roomCode }));
+      $('connect').classList.remove('on');
+      $('session').classList.add('on');
+      setStatus('已连接 ' + roomCode, '');
+      $('overlay').classList.add('hide');
+      setTimeout(layout, 60);
+    };
+    ws.onmessage = function (ev) {
+      if (typeof ev.data === 'string') onJson(ev.data);
+      else onFrame(ev.data);
+    };
+    ws.onclose = function () {
+      connected = false;
+      // 半截的文件不可能再补齐了，丢掉
+      pullRecv = null;
+      closeDecoder();
+      if (wantConnected) {
+        scheduleReconnect();
+      } else {
+        setStatus('已断开', 'bad');
+        $('session').classList.remove('on');
+        $('connect').classList.add('on');
+        $('overlay').classList.remove('hide');
+        $('overlay').textContent = '等待被控端画面…';
+      }
+    };
+    ws.onerror = function () {
+      if (!connected && !$('session').classList.contains('on')) {
+        $('err').textContent = '连不上服务器，检查地址和网络';
+      }
+    };
+  }
+
+  function scheduleReconnect() {
+    if (!wantConnected) return;
+    reconnectAttempt++;
+    var delay = Math.min(800 * Math.pow(2, Math.min(reconnectAttempt - 1, 4)), 10000);
+    // WebSocket 握手本身是成功的（限流发生在之后的 hello 那一帧），所以每次
+    // onopen 都会把 reconnectAttempt 清零，指数退避根本涨不上去。被限流时
+    // 只能靠服务器给的 retryAfterMs 把重连压住。
+    if (blockedUntil > Date.now()) delay = Math.max(delay, blockedUntil - Date.now());
+    setStatus('重连中…（第 ' + reconnectAttempt + ' 次）', 'bad');
+    $('overlay').textContent = '连接断了，正在重连…';
+    $('overlay').classList.remove('hide');
+    clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(openSocket, delay);
+  }
+
+  $('go').addEventListener('click', function () {
+    var host = $('host').value.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
+    var code = $('code').value.trim().toUpperCase();
+    if (!host) { $('err').textContent = '请填写服务器地址'; return; }
+    if (code.length < 4) { $('err').textContent = '请填写配对码'; return; }
+    $('err').textContent = '';
+    roomCode = code;
+    wsHost = host;
+    wantConnected = true;
+    reconnectAttempt = 0;
+    blockedUntil = 0;
+    setStatus('连接中…', '');
+    openSocket();
+  });
+
+  /* ---------------- 编码协商 ---------------- */
+  function requestCodec(pref) {
+    codecPref = pref;
+    if (pref === 'auto' && webCodecsOK) {
+      send({ t: 'codec', v: 'h264' });
+    } else {
+      send({ t: 'codec', v: 'jpeg' });
+    }
+  }
+
+  function closeDecoder() {
+    clearTimeout(fallbackTimer);
+    fallbackTimer = null;
+    if (dec) { dec.close(); dec = null; }
+    codecMode = 'none';
+    setCodecTag('—', true);
+  }
+
+  function fallbackToJpeg(reason) {
+    if (codecMode === 'jpeg') return;
+    codecMode = 'jpeg';
+    if (dec) { dec.close(); dec = null; }
+    clearTimeout(fallbackTimer);
+    fallbackTimer = null;
+    // 这里千万不要把 imgW/imgH 清 0：屏幕尺寸是设备的属性，不随编码方式变。
+    // 清掉的话，如果被控端是「只支持 JPEG、直接回绝 H.264」的那种（不会重建管线、
+    // 也就不会再发一次 meta），imgW 就永远是 0，触摸会被 if (!imgW) return 全部吞掉。
+    send({ t: 'codec', v: 'jpeg' });
+    setCodecTag('JPEG', true);
+    toast('已切到 JPEG：' + reason);
+  }
+
+  function armFallback() {
+    clearTimeout(fallbackTimer);
+    decodedAtConfig = dec ? dec.decoded : 0;
+    fallbackTimer = setTimeout(function () {
+      if (!dec || dec.decoded === decodedAtConfig) {
+        fallbackToJpeg('3 秒内没解出画面');
+      }
+    }, 3000);
+  }
+
+  function startH264(cfg) {
+    if (!webCodecsOK) { fallbackToJpeg('浏览器不支持 WebCodecs'); return; }
+    if (!dec) {
+      dec = new H264Decoder({
+        canvas: view,
+        onSize: function (w, h) { setSize(w, h); $('overlay').classList.add('hide'); },
+        onError: function (e) { /* 单帧错误不致命，等下一个关键帧 */ },
+      });
+    }
+    dec.configure(cfg.codec, cfg.desc, cfg.w, cfg.h).then(function (ok) {
+      if (!ok) { fallbackToJpeg('解码器不接受该编码参数'); return; }
+      codecMode = 'h264';
+      // 这里**绝对不能**清 imgW/imgH。屏幕尺寸是设备的属性，不随编码方式变。
+      // 而且这是个竞态：configure() 是异步的，等它的 promise resolve 时，
+      // 解码器很可能已经解出第一帧、调过 onSize() 把 imgW 设好了。
+      // 此时再清成 0，后面同样尺寸的帧不会让 onSize() 再触发一次（解码器只在尺寸
+      // 变化时才回调），imgW 就永远是 0 —— 表现是「画面能看，但怎么点都没反应」，
+      // 而且时快时慢，纯看 configure() 和第一帧谁先到。
+      // 不清也有好处：setSize() 自带「尺寸没变就直接返回」，尺寸真变了它会自己应用。
+      setCodecTag('H.264', false);
+      $('overlay').classList.add('hide');
+      armFallback();
+    });
+  }
+
+  /* ---------------- 收消息 ---------------- */
+  function onJson(text) {
+    var m; try { m = JSON.parse(text); } catch (e) { return; }
+
+    if (m.t === 'welcome') {
+      blockedUntil = 0;
+      if (!m.agent) { setStatus('已连接，等被控端上线', ''); toast('被控端还没上线'); }
+      else { setStatus('已连接 · ' + (m.device || '安卓'), 'ok'); }
+      if (m.agent && m.mode === 'unattended') setTextMode(true);
+      send({ t: 'apps' });
+      if (!textMode) requestCodec(codecPref);
+
+    } else if (m.t === 'agent-online') {
+      setStatus('已连接 · ' + (m.device || '安卓'), 'ok');
+      toast('被控端已上线');
+      // 被控端可能是重启之后换了模式上来的，两种都要处理
+      setTextMode(m.mode === 'unattended');
+      send({ t: 'apps' });
+      if (!textMode) requestCodec(codecPref);
+
+    } else if (m.t === 'agent-offline') {
+      setStatus('被控端已下线', 'bad');
+      toast('被控端掉线了');
+      closeDecoder();
+      $('netTag').style.display = 'none';
+      if (textMode) $('uiInfo').textContent = '被控端已下线。';
+
+    } else if (m.t === 'ui') {
+      renderUi(m);
+
+    } else if (m.t === 'ack') {
+      // 文字模式下每条指令都会回一条结果，直接显示出来
+      toast(m.msg || (m.ok ? '已执行' : '没执行成功'));
+
+    } else if (m.t === 'meta') {
+      // JPEG 模式下的尺寸；H.264 模式由解码器自己报
+      if (codecMode !== 'h264') setSize(m.w, m.h);
+
+    } else if (m.t === 'vcfg') {
+      startH264(m);
+
+    } else if (m.t === 'codec') {
+      // 被控端回绝了 H.264（比如演示端只有 JPEG），立刻切，不用等超时
+      if (m.v === 'jpeg' && codecMode !== 'jpeg') fallbackToJpeg('被控端不支持 H.264');
+      // v === 'none'：这台手机根本没有画面（文字模式），别再等视频了
+      else if (m.v === 'none') setTextMode(true);
+
+    } else if (m.t === 'net') {
+      var el = $('netTag');
+      el.style.display = '';
+      el.textContent = (m.kbps >= 1000 ? (m.kbps / 1000).toFixed(1) + 'M' : m.kbps + 'k');
+      el.className = m.level === 0 ? 'poor' : m.level === 1 ? 'fair' : '';
+
+    } else if (m.t === 'clip') {
+      var box = $('clipResult');
+      if (m.v) {
+        box.style.display = '';
+        box.textContent = m.v;
+        $('clipCopy').style.display = '';
+        box.dataset.v = m.v;
+        toast(m.src === 'focused' ? '取自手机输入框' : '取自手机剪贴板');
+      } else {
+        box.style.display = '';
+        box.textContent = '没读到内容。让被控手机先复制一次，或点一下要取的输入框再试。';
+        $('clipCopy').style.display = 'none';
+      }
+
+    } else if (m.t === 'apps') {
+      renderApps(m.list || []);
+
+    } else if (m.t === 'flist') {
+      renderPullList(m.items || [], m.note);
+
+    } else if (m.t === 'fbegin') {
+      // 被控端开始推文件：准备好接
+      pullRecv = {
+        name: m.name || 'file.bin',
+        size: m.size || 0,
+        mime: m.mime || 'application/octet-stream',
+        chunks: [],
+        got: 0,
+      };
+      $('pullProg').textContent = '正在接收 ' + pullRecv.name
+        + '（0 / ' + fmtSize(pullRecv.size) + '）…';
+
+    } else if (m.t === 'fdone') {
+      finishPull(!!m.ok, m.msg);
+
+    } else if (m.t === 'status') {
+      toast(m.msg);
+
+    } else if (m.t === 'error') {
+      if (m.retryAfterMs > 0) {
+        blockedUntil = Date.now() + m.retryAfterMs;
+        setStatus('尝试过多，' + Math.ceil(m.retryAfterMs / 1000) + ' 秒后可再试', 'bad');
+      }
+      toast(m.msg);
+    }
+  }
+
+  /* ---------------- 从手机取文件 ---------------- */
+  var pullRecv = null;
+
+  function requestPullList() {
+    $('pullList').innerHTML = '<div class="hint" style="padding:16px;">正在读取…</div>';
+    send({ t: 'flist' });
+  }
+
+  function renderPullList(items, note) {
+    var box = $('pullList');
+    if (!items.length) {
+      box.innerHTML = '<div class="hint" style="padding:16px;">'
+        + (note || '手机上没找到可读取的文件。被控端需要先授予「读取照片」权限。')
+        + '</div>';
+      return;
+    }
+    box.innerHTML = '';
+    items.forEach(function (it) {
+      var row = document.createElement('div');
+      row.className = 'app';
+      row.dataset.id = it.id;
+      row.innerHTML = '<div class="ico">' + (it.kind === 'video' ? '🎬' : '🖼') + '</div>'
+        + '<div style="flex:1;min-width:0;">'
+        + '<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
+        + esc(it.name) + '</div>'
+        + '<div class="hint">' + fmtSize(it.size)
+        + (it.date ? ' · ' + it.date : '') + '</div>'
+        + '</div>';
+      row.addEventListener('click', function () { requestPull(it.id, it.name); });
+      box.appendChild(row);
+    });
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function requestPull(id, name) {
+    if (pullRecv) { toast('上一个文件还在传'); return; }
+    $('pullProg').textContent = '正在请求 ' + name + '…';
+    send({ t: 'fget', id: id });
+  }
+
+  /** 收到一个文件分片（kind = 0x03） */
+  function onFileChunk(data) {
+    if (!pullRecv) return;          // 没在收，丢弃（比如另一个控制端在收）
+    pullRecv.chunks.push(data);
+    pullRecv.got += data.length;
+    if (pullRecv.got % (1024 * 1024) < data.length) {
+      $('pullProg').textContent = '正在接收 ' + pullRecv.name
+        + '（' + fmtSize(pullRecv.got) + ' / ' + fmtSize(pullRecv.size) + '）…';
+    }
+  }
+
+  function finishPull(ok, msg) {
+    if (!pullRecv) return;
+    var r = pullRecv;
+    pullRecv = null;
+
+    if (!ok) {
+      $('pullProg').textContent = '接收失败：' + (msg || '被控端报错');
+      toast('取文件失败');
+      return;
+    }
+    // size 为 0 表示被控端也拿不到文件大小，那就只能信收到的字节数
+    if (r.size > 0 && r.got !== r.size) {
+      $('pullProg').textContent = '文件不完整（收到 ' + fmtSize(r.got)
+        + ' / ' + fmtSize(r.size) + '），请重试。';
+      toast('文件不完整');
+      return;
+    }
+
+    var blob = new Blob(r.chunks, { type: r.mime });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = r.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+
+    $('pullProg').textContent = '已取回 ' + r.name + '（' + fmtSize(r.got) + '）';
+    toast('已取回 ' + r.name);
+  }
+
+  var pendingBitmap = false;
+
+  function onFrame(blob) {
+    blob.arrayBuffer().then(function (buf) {
+      var f = window.RAFrame.parseFrame(buf);
+      if (!f) return;
+      if (f.kind === window.RAFrame.KIND_FILE) {
+        // 文件分片：不画、不计入画面带宽
+        onFileChunk(f.data);
+        return;
+      }
+      lastBytes += (blob.size || 0);
+      if (f.kind === window.RAFrame.KIND_H264) pushH264(f);
+      else drawJpeg(f.data);
+    }).catch(function () {});
+  }
+
+  function pushH264(f) {
+    if (codecMode !== 'h264' || !dec) return;
+    // 解码队列太长就丢帧，保证操作手感
+    if (dec.decoder && dec.decoder.decodeQueueSize > 6) return;
+    if (dec.push(f.data, f.key, f.pts)) frames++;
+  }
+
+  function drawJpeg(data) {
+    if (pendingBitmap) return;
+    pendingBitmap = true;
+    createImageBitmap(new Blob([data], { type: 'image/jpeg' })).then(function (bmp) {
+      if (!imgW) setSize(bmp.width, bmp.height);
+      ctx.drawImage(bmp, 0, 0, view.width, view.height);
+      bmp.close();
+      $('overlay').classList.add('hide');
+      frames++;
+      pendingBitmap = false;
+    }).catch(function () { pendingBitmap = false; });
+  }
+
+  /* 每秒刷新一次统计 */
+  setInterval(function () {
+    var now = performance.now();
+    if (!lastFpsT) { lastFpsT = now; return; }
+    var fps = Math.round(frames * 1000 / (now - lastFpsT));
+    var mbps = (lastBytes * 8 / 1e6 / ((now - lastFpsT) / 1000)).toFixed(1);
+    if (codecMode === 'h264' && dec && dec.dropped > 0) {
+      $('stats').textContent = fps + ' fps · ' + mbps + ' Mbps';
+    } else {
+      $('stats').textContent = fps + ' fps · ' + mbps + ' Mbps';
+    }
+    frames = 0; lastBytes = 0; lastFpsT = now;
+  }, 1000);
+
+  function send(obj) {
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
+  }
+
+  /* ---------------- 震动反馈（默认关闭） ---------------- */
+  /*
+   * iOS Safari 没有 navigator.vibrate —— 调用它静默无效。
+   * 唯一能出触感的办法是让用户真实点到 <input type=checkbox switch>
+   * （Safari 17.4+ 的控件），所以 #hapticLayer 这层透明 label 就盖在画布上，
+   * label 的 for 会把点击转发给隐藏的 switch，系统就给一下触感。
+   * Android Chrome 则走标准 navigator.vibrate。
+   *
+   * 因为这一层改变了触摸落点，默认关闭，让用户自己决定。
+   */
+  var hapticsOn = false;
+
+  function setHaptics(on) {
+    hapticsOn = !!on;
+    $('hapticLayer').classList.toggle('on', hapticsOn);
+    $('bHaptic').classList.toggle('on', hapticsOn);
+    try { localStorage.setItem('ra-haptics', hapticsOn ? '1' : '0'); } catch (e) {}
+  }
+
+  /** iOS 那边靠 label->switch 自动出触感，这里只管 Android 的标准接口 */
+  function buzz(ms) {
+    if (!hapticsOn) return;
+    if (navigator.vibrate) {
+      try { navigator.vibrate(ms || 10); } catch (e) {}
+    }
+  }
+
+  try {
+    if (localStorage.getItem('ra-haptics') === '1') setHaptics(true);
+  } catch (e) {}
+
+  $('bHaptic').addEventListener('click', function () {
+    setHaptics(!hapticsOn);
+    if (hapticsOn) buzz(15);
+    toast(hapticsOn ? '震动反馈已开' : '震动反馈已关');
+  });
+
+  /* ---------------- 触摸 -> 手势 ---------------- */
+  function clamp01(v) { return Math.min(1, Math.max(0, v)); }
+
+  function norm(ev) {
+    var r = surface.getBoundingClientRect();
+    var p = ev.touches && ev.touches[0] ? ev.touches[0] : ev;
+    if (rotated) {
+      /*
+       * 画布被 rotate(90deg) 转过了，getBoundingClientRect 给的是转之后的外接矩形，
+       * 宽高是互换的，直接按 left/top 除会算错（越靠边错得越多，只有正中心对）。
+       * 所以按「绕中心逆时针转 90°」反推回未旋转的画布坐标：
+       *   旋转后偏移 (dx, dy) = (-oy, ox)  =>  ox = dy, oy = -dx
+       * 又因为外接矩形的 width = 原高、height = 原宽。
+       */
+      var cx = r.left + r.width / 2;
+      var cy = r.top + r.height / 2;
+      var dx = p.clientX - cx;
+      var dy = p.clientY - cy;
+      return {
+        x: clamp01(dy / r.height + 0.5),
+        y: clamp01(-dx / r.width + 0.5)
+      };
+    }
+    return {
+      x: clamp01((p.clientX - r.left) / r.width),
+      y: clamp01((p.clientY - r.top) / r.height)
+    };
+  }
+
+  function startLong() {
+    clearTimeout(longPressTimer);
+    longPressTimer = setTimeout(function () {
+      longPressTimer = null;
+      if (!movedFar) {
+        send({ t: 'long', x: startX, y: startY });
+        toast('长按');
+        moved = true;
+      }
+    }, 600);
+  }
+
+  surface.addEventListener('touchstart', function (e) {
+    // 这里**故意不 preventDefault**：一旦调了，浏览器就会取消这次手势的默认行为，
+    // label -> 隐藏 switch 的点击转发也就没了，iOS 上就再也出不来触感。
+    // 页面不滚动、不缩放靠的是 CSS 的 touch-action:none，不是靠这个。
+    if (!imgW) return;
+    var p = norm(e);
+    startX = p.x; startY = p.y; startT = Date.now();
+    moved = false; movedFar = false;
+    startLong();
+  }, { passive: true });
+
+  surface.addEventListener('touchmove', function (e) {
+    e.preventDefault();
+    var p = norm(e);
+    var dx = (p.x - startX) * (view.clientWidth || 1);
+    var dy = (p.y - startY) * (view.clientHeight || 1);
+    if (Math.sqrt(dx * dx + dy * dy) > 12) {
+      movedFar = true;
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+  }, { passive: false });
+
+  surface.addEventListener('touchend', function (e) {
+    // 同上，不 preventDefault，否则会把 label 的点击转发一起取消掉
+    clearTimeout(longPressTimer);
+    if (!imgW || moved) return;
+    var p = norm(e.changedTouches && e.changedTouches[0] ? e.changedTouches[0] : e);
+    var dur = Date.now() - startT;
+    var dx = (p.x - startX) * (view.clientWidth || 1);
+    var dy = (p.y - startY) * (view.clientHeight || 1);
+    var dist = Math.sqrt(dx * dx + dy * dy);
+
+    // 阈值必须和 startLong() 的 600ms 对齐。
+    // 原来这里是 400ms，于是「按住 400~600ms 再松开」既不满足轻点、也没到长按，
+    // 两个分支都进不去 —— 手指抬起来手机上什么反应都没有。中间那段是空的。
+    // 改成 600 之后：<600 一律算轻点；>=600 时长按已经发过了（moved 被置 true，
+    // 上面那行 if (moved) return 会拦掉），所以不会重复发。
+    if (dist < 10 && dur < 600) {
+      send({ t: 'tap', x: startX, y: startY });
+      buzz(10);
+    } else if (dist >= 10) {
+      send({ t: 'swipe', x1: startX, y1: startY, x2: p.x, y2: p.y, d: Math.min(1200, Math.max(60, dur)) });
+    }
+  }, { passive: true });
+
+  /* ---------------- 工具栏 ---------------- */
+  function bindKey(el, key) {
+    el.addEventListener('click', function () { send({ t: 'key', k: key }); });
+  }
+  bindKey($('bBack'), 'back');
+  bindKey($('bHome'), 'home');
+  bindKey($('bRecents'), 'recents');
+  bindKey($('bNotif'), 'notifications');
+
+  $('bRotate').addEventListener('click', function () {
+    rotated = !rotated;
+    // 变换要加在 #surface 上而不是 canvas 上 —— 触摸和震动层都绑在这一层
+    surface.style.transform = rotated ? 'rotate(90deg)' : 'none';
+    this.classList.toggle('on', rotated);
+  });
+
+  $('quit').addEventListener('click', function () {
+    wantConnected = false;
+    clearTimeout(reconnectTimer);
+    if (ws) { try { ws.send(JSON.stringify({ t: 'bye' })); ws.close(); } catch (e) {} }
+    ws = null;
+    closeDecoder();
+    $('netTag').style.display = 'none';
+    $('session').classList.remove('on');
+    $('connect').classList.add('on');
+    $('overlay').classList.remove('hide');
+    $('overlay').textContent = '等待被控端画面…';
+    setStatus('未连接', '');
+  });
+
+  /* 抽屉 */
+  var SHEETS = ['appSheet', 'kbSheet', 'qSheet', 'clipSheet', 'fileSheet', 'pullSheet', 'uiSheet'];
+  function openSheet(id) {
+    SHEETS.forEach(function (s) { $(s).classList.toggle('on', s === id); });
+  }
+  function closeSheets() {
+    SHEETS.forEach(function (s) { $(s).classList.remove('on'); });
+  }
+  $('bApps').addEventListener('click', function () { openSheet('appSheet'); send({ t: 'apps' }); });
+  $('bKb').addEventListener('click', function () { openSheet('kbSheet'); setTimeout(function () { $('kbText').focus(); }, 120); });
+  $('bQual').addEventListener('click', function () { openSheet('qSheet'); });
+  $('bClip').addEventListener('click', function () { openSheet('clipSheet'); });
+  $('bFile').addEventListener('click', function () { openSheet('fileSheet'); });
+  $('bPull').addEventListener('click', function () { openSheet('pullSheet'); requestPullList(); });
+  $('bUi').addEventListener('click', function () { openSheet('uiSheet'); requestUi(); });
+  $('appClose').addEventListener('click', closeSheets);
+  $('kbClose').addEventListener('click', closeSheets);
+  $('qClose').addEventListener('click', closeSheets);
+  $('clipClose').addEventListener('click', closeSheets);
+  $('fileClose').addEventListener('click', closeSheets);
+  $('pullClose').addEventListener('click', closeSheets);
+  $('pullRefresh').addEventListener('click', requestPullList);
+  $('uiClose').addEventListener('click', closeSheets);
+  $('uiRefresh').addEventListener('click', requestUi);
+
+  /* ---------------- 剪贴板 ---------------- */
+  function clipValue() { return $('clipText').value; }
+  $('clipSend').addEventListener('click', function () {
+    var v = clipValue();
+    if (!v) { toast('先填点内容'); return; }
+    send({ t: 'clip', v: v });
+    toast('已写入手机剪贴板');
+  });
+  $('clipPaste').addEventListener('click', function () {
+    var v = clipValue();
+    if (!v) { toast('先填点内容'); return; }
+    send({ t: 'clip', v: v, paste: true });
+    toast('已写入并尝试粘贴');
+  });
+  $('clipGet').addEventListener('click', function () {
+    send({ t: 'clipget' });
+    toast('正在读取…');
+  });
+  $('clipCopy').addEventListener('click', function () {
+    var v = $('clipResult').dataset.v || '';
+    if (!v) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(v).then(
+        function () { toast('已复制到本机剪贴板'); },
+        function () { toast('复制失败，长按上面的文字手动复制'); });
+    } else {
+      toast('这个浏览器不支持直接复制，长按上面的文字手动复制');
+    }
+  });
+
+  /* ---------------- 传文件 ---------------- */
+  var CHUNK = 64 * 1024;
+
+  function sendFile() {
+    var input = $('fileInput');
+    var file = input.files && input.files[0];
+    if (!file) { toast('先选一个文件'); return; }
+    if (!ws || ws.readyState !== 1) { toast('还没连上'); return; }
+
+    var prog = $('fileProg');
+    prog.textContent = '准备发送 ' + file.name + '（' + fmtSize(file.size) + '）…';
+    send({ t: 'fstart', name: file.name, size: file.size,
+           mime: file.type || 'application/octet-stream' });
+
+    var offset = 0;
+    var reader = new FileReader();
+
+    reader.onerror = function () { prog.textContent = '读取文件失败'; };
+
+    reader.onload = function () {
+      if (!ws || ws.readyState !== 1) { prog.textContent = '连接断了，发送中断'; return; }
+      try {
+        ws.send(reader.result);              // ArrayBuffer -> 二进制帧
+      } catch (e) {
+        prog.textContent = '发送失败：' + e.message;
+        return;
+      }
+      offset += CHUNK;
+      var pct = Math.min(100, Math.round(offset * 100 / file.size));
+      prog.textContent = '已发送 ' + pct + '%（' + fmtSize(Math.min(offset, file.size)) + ' / ' + fmtSize(file.size) + '）';
+
+      if (offset >= file.size) {
+        send({ t: 'fend' });
+        prog.textContent = '已发送 ' + file.name + '，等被控端确认…';
+        return;
+      }
+      pump();
+    };
+
+    function pump() {
+      // 发送缓冲堆太多就先等一等，别把内存吃爆
+      if (ws.bufferedAmount > 4 * 1024 * 1024) {
+        setTimeout(pump, 60);
+        return;
+      }
+      reader.readAsArrayBuffer(file.slice(offset, offset + CHUNK));
+    }
+
+    pump();
+  }
+
+  function fmtSize(n) {
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+    return (n / 1024 / 1024).toFixed(2) + ' MB';
+  }
+
+  $('fileSend').addEventListener('click', sendFile);
+
+  /* App 列表 */
+  var allApps = [];
+  function renderApps(list) { allApps = list; drawApps(''); }
+  function drawApps(kw) {
+    var box = $('appList');
+    box.innerHTML = '';
+    var q = kw.trim().toLowerCase();
+    var n = 0;
+    allApps.forEach(function (a) {
+      if (q && (a.n || '').toLowerCase().indexOf(q) < 0 && (a.p || '').toLowerCase().indexOf(q) < 0) return;
+      n++;
+      var row = document.createElement('div');
+      row.className = 'app';
+      var ico = document.createElement('div');
+      ico.className = 'ico';
+      ico.textContent = (a.n || '?').slice(0, 1);
+      var nm = document.createElement('div');
+      nm.className = 'nm';
+      nm.textContent = a.n || a.p;
+      var pk = document.createElement('div');
+      pk.className = 'pk';
+      pk.textContent = a.p;
+      nm.appendChild(pk);
+      row.appendChild(ico); row.appendChild(nm);
+      row.addEventListener('click', function () {
+        send({ t: 'launch', pkg: a.p });
+        toast('正在打开 ' + (a.n || a.p));
+        closeSheets();
+      });
+      box.appendChild(row);
+    });
+    if (!n) {
+      var d = document.createElement('div');
+      d.className = 'hint';
+      d.style.padding = '16px';
+      d.textContent = allApps.length ? '没有匹配的应用' : '被控端还没返回应用列表';
+      box.appendChild(d);
+    }
+  }
+  $('appSearch').addEventListener('input', function () { drawApps(this.value); });
+
+  /* 文字 */
+  function sendText(withEnter) {
+    var v = $('kbText').value;
+    if (!v) return;
+    send({ t: 'text', s: v });
+    if (withEnter) setTimeout(function () { send({ t: 'key', k: 'enter' }); }, 260);
+    $('kbText').value = '';
+    toast('已发送');
+  }
+  $('kbSend').addEventListener('click', function () { sendText(false); });
+  $('kbEnter').addEventListener('click', function () { sendText(true); });
+
+  /* 画质 */
+  var curQ = null;
+  Array.prototype.forEach.call(document.querySelectorAll('#qSheet [data-q]'), function (b) {
+    b.addEventListener('click', function () {
+      var p = b.getAttribute('data-q').split(',');
+      send({ t: 'quality', w: +p[0], fps: +p[1], q: +p[2], br: +p[3] });
+      Array.prototype.forEach.call(document.querySelectorAll('#qSheet [data-q]'),
+        function (x) { x.classList.toggle('on', x === b); });
+      curQ = b;
+      toast('画质：' + p[0] + 'p / ' + p[1] + 'fps');
+      closeSheets();
+    });
+  });
+
+  /* 编码方式 */
+  Array.prototype.forEach.call(document.querySelectorAll('#qSheet [data-codec]'), function (b) {
+    b.addEventListener('click', function () {
+      var v = b.getAttribute('data-codec');
+      Array.prototype.forEach.call(document.querySelectorAll('#qSheet [data-codec]'),
+        function (x) { x.classList.toggle('on', x === b); });
+      if (v === 'jpeg') {
+        codecMode = 'none';
+        requestCodec('jpeg');
+        setCodecTag('JPEG', true);
+      } else {
+        requestCodec('auto');
+        setCodecTag('协商中…', false);
+      }
+      toast(v === 'jpeg' ? '已切到 JPEG' : '已请求 H.264');
+      closeSheets();
+    });
+  });
+
+  /* 默认高亮 */
+  var autoBtn = document.querySelector('#qSheet [data-codec="auto"]');
+  if (autoBtn) autoBtn.classList.add('on');
+  if (!webCodecsOK) {
+    var jb = document.querySelector('#qSheet [data-codec="jpeg"]');
+    if (jb) jb.classList.add('on');
+    if (autoBtn) autoBtn.classList.remove('on');
+  }
+  setCodecTag('—', true);
+
+  /* 从 URL 带配对码： ?code=XXXX */
+  var m = /[?&]code=([A-Za-z0-9]+)/.exec(location.search);
+  if (m) $('code').value = m[1].toUpperCase();
+})();
+</script>
+</body>
+</html>

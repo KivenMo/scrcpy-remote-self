@@ -1,0 +1,19 @@
+# Caddyfile — 无域名，用自签证书（最快上手）
+#
+# 被控端 App 里：
+#   地址填 VPS 的公网 IP，端口 8081，TLS 打开，
+#   指纹框留空（第一次连会 TOFU，自动记下指纹）。
+#
+# 控制端浏览器打开 https://VPS_IP:443/ 时会报证书警告，
+# 点「高级」→「继续前往」即可（自签证书的正常行为）。
+
+:443 {
+    tls /data/certs/cert.pem /data/certs/key.pem
+
+    @ws {
+        header Connection *Upgrade*
+        header Upgrade websocket
+    }
+    reverse_proxy @ws relay:8080
+    reverse_proxy relay:8080
+}
